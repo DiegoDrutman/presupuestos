@@ -1,0 +1,65 @@
+import React from "react"
+import { View, Text, TextInput, StyleSheet } from "react-native"
+import { Card } from "../layout/Card"
+import { colors } from "../../constants/colors"
+import { spacing } from "../../constants/spacing"
+
+type Props = {
+  materiales: number
+  onChangeMateriales: (value: number) => void
+}
+
+export function BudgetMaterials({ materiales, onChangeMateriales }: Props) {
+  const handleChange = (value: string) => {
+    const cleaned = value.replace(/[^0-9.]/g, "")
+    const num = cleaned === "" ? 0 : Number(cleaned)
+    onChangeMateriales(num)
+  }
+
+  return (
+    <Card>
+      <View>
+        <Text style={styles.titulo}>Materiales</Text>
+
+        <View style={styles.inputWithSymbol}>
+          <Text style={styles.symbol}>$</Text>
+          <TextInput
+            style={styles.inputInner}
+            value={materiales === 0 ? "" : String(materiales)}
+            onChangeText={handleChange}
+            keyboardType="numeric"
+            placeholder="0"
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+      </View>
+    </Card>
+  )
+}
+
+const styles = StyleSheet.create({
+  titulo: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: spacing.xs,
+    color: colors.textPrimary,
+  },
+  inputWithSymbol: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 6,
+    backgroundColor: "white",
+    paddingHorizontal: spacing.sm,
+  },
+  symbol: {
+    fontSize: 16,
+    color: colors.textMuted,
+    marginRight: 4,
+  },
+  inputInner: {
+    flex: 1,
+    paddingVertical: 6,
+  },
+})
