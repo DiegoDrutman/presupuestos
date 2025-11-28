@@ -10,7 +10,7 @@ export function Header() {
         {/* LOGO */}
         <View style={styles.logoBox}>
           <Image
-            source={require("../../assets/images/logo.png")}
+            source={require("../../assets/images/android-icon.png")}
             resizeMode="contain"
             style={styles.logoImg}
           />

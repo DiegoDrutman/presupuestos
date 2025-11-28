@@ -92,7 +92,7 @@ export function useBudget() {
   // ----------------------------
 
   async function getLogoBase64() {
-    const asset = Asset.fromModule(require("../assets/images/logo.png"))
+    const asset = Asset.fromModule(require("../assets/images/android-icon.png"))
     await asset.downloadAsync()
 
     const uri = asset.localUri || asset.uri
