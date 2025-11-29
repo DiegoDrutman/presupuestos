@@ -86,32 +86,70 @@ export function useBudget() {
     setBudget(prev => ({ ...prev, manoDeObra }))
 
   // ----------------------------
-  // GENERAR LOGO (ROBUSTO)
+  // LOGO CON GITHUB + CACHÉ + FALLBACK
   // ----------------------------
-  // Devuelve base64 o null si falla, pero NUNCA rompe toda la generación.
+
   async function getLogoBase64(): Promise<string | null> {
-  try {
-    console.log("PDF: cargando logo...")
-
-    const asset = require("../assets/images/logo.png")
-
-    const resolved = Asset.fromModule(asset)
-    await resolved.downloadAsync()
-
-    if (!resolved.localUri) {
-      throw new Error("No se pudo acceder al archivo empaquetado.")
+    const CACHE_FILE = FileSystem.cacheDirectory + 'cached_logo.png'
+    const LOGO_URL = "https://raw.githubusercontent.com/DiegoDrutman/presupuestos/main/assets/images/logo.png"
+    
+    try {
+      // Verificar si ya existe en caché
+      const fileInfo = await FileSystem.getInfoAsync(CACHE_FILE)
+      
+      if (fileInfo.exists) {
+        console.log("PDF: cargando logo desde caché...")
+        const base64 = await FileSystem.readAsStringAsync(CACHE_FILE, {
+          encoding: FileSystem.EncodingType.Base64,
+        })
+        return `data:image/png;base64,${base64}`
+      }
+      
+      // Descargar y guardar en caché
+      console.log("PDF: descargando logo desde GitHub...")
+      const downloadResumable = FileSystem.createDownloadResumable(
+        LOGO_URL,
+        CACHE_FILE,
+        {}
+      )
+      
+      const result = await downloadResumable.downloadAsync()
+      
+      if (!result?.uri) {
+        throw new Error("Descarga falló")
+      }
+      
+      const base64 = await FileSystem.readAsStringAsync(result.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      })
+      
+      console.log("PDF: logo descargado y guardado en caché")
+      return `data:image/png;base64,${base64}`
+      
+    } catch (error) {
+      console.warn("PDF: error descargando logo desde GitHub, usando fallback local...", error)
+      return getLocalLogoFallback()
     }
-
-    const base64 = await FileSystem.readAsStringAsync(resolved.localUri, {
-      encoding: "base64",
-    })
-
-    return `data:image/png;base64,${base64}`
-  } catch (e) {
-    console.warn("PDF: no se pudo cargar el logo", e)
-    return null
   }
-}
+
+  async function getLocalLogoFallback(): Promise<string | null> {
+    try {
+      const asset = require("../assets/images/logo.png")
+      const resolved = Asset.fromModule(asset)
+      await resolved.downloadAsync()
+
+      if (!resolved.localUri) return null
+
+      const base64 = await FileSystem.readAsStringAsync(resolved.localUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      })
+
+      return `data:image/png;base64,${base64}`
+    } catch {
+      console.warn("PDF: fallback local también falló")
+      return null
+    }
+  }
 
   // ----------------------------
   // GENERAR Y COMPARTIR PDF
