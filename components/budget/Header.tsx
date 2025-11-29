@@ -1,7 +1,7 @@
 import React from "react"
-import { View, Text, StyleSheet, Image } from "react-native"
-import { Card } from "../layout/Card"
+import { Image, StyleSheet, Text, View } from "react-native"
 import { colors } from "../../constants/colors"
+import { Card } from "../layout/Card"
 
 export function Header() {
   return (
@@ -10,7 +10,7 @@ export function Header() {
         {/* LOGO */}
         <View style={styles.logoBox}>
           <Image
-            source={require("../../assets/images/android-icon.png")}
+            source={require("../../assets/images/logo.png")}
             resizeMode="contain"
             style={styles.logoImg}
           />

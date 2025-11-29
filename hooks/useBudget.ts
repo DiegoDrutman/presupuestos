@@ -27,8 +27,6 @@ if ((pdfFonts as any).pdfMake && (pdfFonts as any).pdfMake.vfs) {
 // TYPES
 // ----------------------------
 
-// Lo dejo por compatibilidad si algún archivo todavía importa BudgetItem,
-// pero ya no lo usamos más en el estado.
 export type BudgetItem = {
   id: string
   descripcion: string
@@ -88,20 +86,32 @@ export function useBudget() {
     setBudget(prev => ({ ...prev, manoDeObra }))
 
   // ----------------------------
-  // GENERAR LOGO
+  // GENERAR LOGO (ROBUSTO)
   // ----------------------------
+  // Devuelve base64 o null si falla, pero NUNCA rompe toda la generación.
+  async function getLogoBase64(): Promise<string | null> {
+  try {
+    console.log("PDF: cargando logo...")
 
-  async function getLogoBase64() {
-    const asset = Asset.fromModule(require("../assets/images/android-icon.png"))
-    await asset.downloadAsync()
+    const asset = require("../assets/images/logo.png")
 
-    const uri = asset.localUri || asset.uri
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: "base64" as any,
+    const resolved = Asset.fromModule(asset)
+    await resolved.downloadAsync()
+
+    if (!resolved.localUri) {
+      throw new Error("No se pudo acceder al archivo empaquetado.")
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(resolved.localUri, {
+      encoding: "base64",
     })
 
-    return `data:image/jpeg;base64,${base64}`
+    return `data:image/png;base64,${base64}`
+  } catch (e) {
+    console.warn("PDF: no se pudo cargar el logo", e)
+    return null
   }
+}
 
   // ----------------------------
   // GENERAR Y COMPARTIR PDF
@@ -121,6 +131,8 @@ export function useBudget() {
     }
 
     try {
+      console.log("PDF: inicio generación")
+
       const logoBase64 = await getLogoBase64()
 
       const nombreCliente = budget.cliente.trim().replace(/\s+/g, "-")
@@ -130,7 +142,63 @@ export function useBudget() {
       const cacheDir = (FileSystem as any).cacheDirectory as
         | string
         | undefined
-      const fileUri = (cacheDir || "") + (baseName || "presupuesto") + ".pdf"
+
+      if (!cacheDir) {
+        throw new Error("No se pudo acceder al directorio de caché.")
+      }
+
+      const fileUri = cacheDir + (baseName || "presupuesto") + ".pdf"
+      console.log("PDF: se va a escribir en", fileUri)
+
+      // Armamos las columnas del header de forma dinámica:
+      const headerColumns: any[] = []
+
+      if (logoBase64) {
+        headerColumns.push({
+          image: logoBase64,
+          width: 70,
+          margin: [0, 0, 12, 0],
+        })
+      }
+
+      headerColumns.push(
+        {
+          stack: [
+            {
+              text: "INSTALACIONES THERMOSANITARIAS",
+              style: "headerMain",
+            },
+            {
+              text: "de Roberto Guidotti",
+              style: "headerSub",
+            },
+          ],
+        },
+        {
+          alignment: "right",
+          width: "40%",
+          stack: [
+            {
+              text: "AGUA · GAS · CALEFACCIÓN · CLOACAS · PLUVIALES",
+              fontSize: 9,
+              bold: true,
+              color: "#004a7c",
+            },
+            {
+              text: "VAPOR · AIRE COMPRIMIDO · PLANOS Y TRÁMITES",
+              fontSize: 9,
+              bold: true,
+              color: "#004a7c",
+            },
+            {
+              text: "INDUSTRIALES · COMERCIALES · DOMICILIARIAS",
+              fontSize: 9,
+              bold: true,
+              color: "#004a7c",
+            },
+          ],
+        }
+      )
 
       const docDefinition: any = {
         pageSize: "A4",
@@ -140,45 +208,7 @@ export function useBudget() {
           margin: [24, 20, 24, 0],
           stack: [
             {
-              columns: [
-                { image: logoBase64, width: 70, margin: [0, 0, 12, 0] },
-                {
-                  stack: [
-                    {
-                      text: "INSTALACIONES THERMOSANITARIAS",
-                      style: "headerMain",
-                    },
-                    {
-                      text: "de Roberto Guidotti",
-                      style: "headerSub",
-                    },
-                  ],
-                },
-                {
-                  alignment: "right",
-                  width: "40%",
-                  stack: [
-                    {
-                      text: "AGUA · GAS · CALEFACCIÓN · CLOACAS · PLUVIALES",
-                      fontSize: 9,
-                      bold: true,
-                      color: "#004a7c",
-                    },
-                    {
-                      text: "VAPOR · AIRE COMPRIMIDO · PLANOS Y TRÁMITES",
-                      fontSize: 9,
-                      bold: true,
-                      color: "#004a7c",
-                    },
-                    {
-                      text: "INDUSTRIALES · COMERCIALES · DOMICILIARIAS",
-                      fontSize: 9,
-                      bold: true,
-                      color: "#004a7c",
-                    },
-                  ],
-                },
-              ],
+              columns: headerColumns,
             },
           ],
         }),
@@ -302,6 +332,8 @@ export function useBudget() {
         defaultStyle: { fontSize: 11 },
       }
 
+      console.log("PDF: creando documento...")
+
       const base64Pdf: string = await new Promise((resolve, reject) => {
         try {
           const pdfDocGenerator = (pdfMake as any).createPdf(docDefinition)
@@ -311,21 +343,34 @@ export function useBudget() {
         }
       })
 
+      console.log("PDF: escribiendo archivo en FileSystem...")
       await FileSystem.writeAsStringAsync(fileUri, base64Pdf, {
         encoding: (FileSystem as any).EncodingType.Base64,
       })
 
       const available = await Sharing.isAvailableAsync()
-      if (!available) return
+      if (!available) {
+        console.log("PDF: Sharing no disponible")
+        return
+      }
 
+      console.log("PDF: abriendo diálogo de compartir...")
       await Sharing.shareAsync(fileUri, {
         mimeType: "application/pdf",
         dialogTitle: "Compartir presupuesto",
         UTI: "com.adobe.pdf",
       })
-    } catch (error) {
+
+      console.log("PDF: compartido OK")
+    } catch (error: any) {
       console.error("Error al generar PDF:", error)
-      Alert.alert("Error", "Ocurrió un error al generar el PDF.")
+
+      const message =
+        error?.message ||
+        (typeof error === "string" ? error : JSON.stringify(error)) ||
+        "Ocurrió un error desconocido."
+
+      Alert.alert("Error al generar el PDF", message)
     }
   }
 
